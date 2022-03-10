@@ -9,7 +9,6 @@ import java.io.*;
 
 public class PdfGeneratorService {
     public static void main(String[] args) {
-        /* use createStandalone() for Jetty-less WAR file for Heroku */
         Javalin app = Javalin
                 .create(JavalinConfig::enableDevLogging)
                 .start(getHerokuAssignedPort());
@@ -21,27 +20,10 @@ public class PdfGeneratorService {
         app.post("/generate", ctx -> {
             //1. inputs
             String wordListAsHTML = ctx.body();
-                // or String html = ctx.formParam("html");
                 // or bodyAsBytes() or bodyAsInputStream();
 
-            //2. Convert to PDF
-            //TODO refactor into it's own function. Maybe even a POJO!
-            Document document = Jsoup.parse(wordListAsHTML, "UTF-8");
-            document.outputSettings().syntax(Document.OutputSettings.Syntax.xml);
-
-            ITextRenderer renderer = new ITextRenderer();
-            renderer.setDocumentFromString(document.html());
-            renderer.layout();
-
-            // switch to using a different output stream,
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            renderer.createPDF(baos);
-
-            // then copy it into an input stream which ctx.response() can accept
-            InputStream resultStream = new ByteArrayInputStream(baos.toByteArray());
-            baos.close();
-
-            ctx.result(resultStream)
+            InputStream pdfIs = getRenderedPdf(wordListAsHTML);
+            ctx.result(pdfIs)
                     .contentType("application/pdf")
                     .header("Content-Disposition", "attachment; filename=wordlist.pdf");
 
@@ -54,6 +36,32 @@ public class PdfGeneratorService {
                 sharedContext.setInteractive(false);
             }*/
         });
+    }
+
+    /**
+     * TODO not sure I'm comfortable with "static"
+     *
+     * @param html the content to convert into a PDF
+     * @return InputStream the rendered PDF suitable for returning to client by Javalin
+     */
+    public static InputStream getRenderedPdf(String html) throws IOException {
+        //2. Convert to PDF
+        Document document = Jsoup.parse(html, "UTF-8");
+        document.outputSettings().syntax(Document.OutputSettings.Syntax.xml);
+
+        ITextRenderer renderer = new ITextRenderer();
+        renderer.setDocumentFromString(document.html());
+        renderer.layout();
+
+        // switch to using a different output stream,
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        renderer.createPDF(baos);
+
+        // then copy it into an input stream which ctx.response() can accept
+        InputStream resultStream = new ByteArrayInputStream(baos.toByteArray());
+        baos.close();
+
+        return resultStream;
     }
 
     /**
